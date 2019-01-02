@@ -13,6 +13,8 @@ enum Stages {
 int stage;
 string TARGET_BT_MAC = "";
 int TARGET_BT_CHAN = 0;
+const string FAIL = "[\033[1;31mFAIL\033[0m]";
+const string OK = "[\033[1;32mOK\033[0m]";
 
 void main(string[] args){
 	writeln("\033[1;7;36m :::BlueFite::: \n\033[1;27;36mBinary wrapper by Sonic, original script by Sid \"Pahakir228\" Jaresky\033[0m");
@@ -20,13 +22,13 @@ void main(string[] args){
 	writeln(":: running priviledge check...");
 	string otp = executeShell("id -u").output.chop();
 	if(otp != "0") {
-		writeln(":: [\033[1;31mFAIL\033[0m] priviledge check");
+		writefln(":: %s priviledge check", FAIL);
 		writeln("This program must be run with superuser priviledges!");
-		exit (-1);
-
+		exit(-1);
 	}
+
 	Thread.sleep(dur!"seconds"(1));
-	writeln(":: [\033[1;32mOK\033[0m] priviledge check");
+	writefln(":: %s priviledge check", OK);
 	Thread.sleep(dur!"seconds"(1));
 
 	writeln(":: setting up rfcomm (prep stage 0)...");
@@ -34,31 +36,31 @@ void main(string[] args){
 	bool ret = setup(Stages.RFCOMM);
 	if(!ret) emext();
 	Thread.sleep(dur!"seconds"(1));
-	writeln(":: [\033[1;32mOK\033[0m] stage 0");
+	writefln(":: %s stage 0", OK);
 
 	writeln(":: running test (prep stage 1)...");
 	stage = Stages.TEST;
 	ret = setup(Stages.TEST);
 	if(!ret) emext();
-	writeln(":: [\033[1;32mOK\033[0m] stage 1");
+	writefln(":: %s stage 1", OK);
 
 	writeln(":: running scan (work stage 2)...");
 	stage = Stages.SCAN;
 	ret = setup(Stages.SCAN);
 	if(!ret) emext();
-	writeln(":: [\033[1;32mOK\033[0m] stage 2");
+	writefln(":: %s stage 2", OK);
 
 	writeln(":: pinging target (work stage 3)...");
 	stage = Stages.PING;
 	ret = setup(Stages.PING);
 	if(!ret) emext();
-	writeln(":: [\033[1;32mOK\033[0m] stage 3");
+	writefln(":: %s stage 3", OK);
 
 	writeln(":: dumping channels (work stage 4)...");
 	stage = Stages.DUMP;
 	ret = setup(Stages.DUMP);
 	if(!ret) emext();
-	writeln(":: [\033[1;32mOK\033[0m] stage 4");
+	writefln(":: %s stage 4", OK);
 
 	writeln(":: executing...");
 	stage = Stages.EXEC;
@@ -71,7 +73,7 @@ void main(string[] args){
 }
 
 void emext(){
-	writeln(":: [\033[1;31mFAIL\033[0m] stage " ~ to!string(stage));
+	writefln(":: %s stage %d", FAIL, stage);
 	writeln("Error occured while running stage!");
 	exit(stage);
 }
