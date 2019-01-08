@@ -148,8 +148,7 @@ bool setup(int stage){
 				}
 			}
 
-			if(result != 0) return false;
-			return true;
+			return result == 0;
 		case Stages.DUMP:
 			auto p = executeShell("sdptool browse " ~ TARGET_BT_MAC);
 			string output = p.output;
@@ -167,7 +166,7 @@ bool setup(int stage){
 			}
 			if(lines_construct.length < 20) {
 				writeln(":: target does not seem to have open channels");
-				emext();
+				rext();
 			}
 			else {
 				write(lines_construct ~ ":: ");
